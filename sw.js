@@ -7,7 +7,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'subkanri-v1.0.2';
+var CACHE_VERSION = 'subkanri-v1.1.0';
 var ASSETS = [
   './',
   './index.html',

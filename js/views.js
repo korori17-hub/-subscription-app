@@ -20,6 +20,9 @@
     var banner = ui.$('#banner');
     var due = S.sortByRenewal(list.filter(function (s) { return S.isInNotifyWindow(s, today); }));
     banner.hidden = due.length === 0;
+    ui.$('#hero-insight').textContent = due.length
+      ? due.length + '件の更新が近づいています'
+      : '毎月の支出を、ひと目で。';
     if (!due.length) return;
     ui.$('#banner-title').textContent = due.length + '件の更新が近づいています';
     var ul = ui.$('#banner-list');
@@ -29,6 +32,11 @@
         el('span', { class: 'banner-days', text: S.daysLeftLabel(S.daysLeft(s, today)) })
       ]);
     }));
+  }
+
+  function monogram(name) {
+    var first = Array.from(String(name).trim())[0] || '?';
+    return first.toUpperCase();
   }
 
   function card(s, today, handlers) {
@@ -54,23 +62,27 @@
       }));
     }
 
-    var meta = [
-      el('div', null, [el('dt', { text: '次回更新' }), el('dd', { text: D.formatJa(s.nextRenewal) })])
-    ];
+    var meta = [];
     if (s.paymentMethod) meta.push(el('div', null, [el('dt', { text: '支払い' }), el('dd', { text: s.paymentMethod })]));
     meta.push(el('div', null, [el('dt', { text: '通知' }),
       el('dd', { text: s.notifyDaysBefore === 0 ? '当日' : s.notifyDaysBefore + '日前' })]));
 
     return el('li', { class: 'card' + (soon ? ' is-soon' : ''), 'data-id': s.id }, [
       el('div', { class: 'card-head' }, [
-        el('h3', { class: 'card-title', text: s.name }),
-        el('span', { class: badgeClass, text: S.daysLeftLabel(n) })
+        el('span', { class: 'monogram', 'aria-hidden': 'true', text: monogram(s.name) }),
+        el('div', { class: 'card-info' }, [
+          el('h3', { class: 'card-title', text: s.name }),
+          el('p', { class: 'card-renewal', text: D.formatJa(s.nextRenewal) + ' 更新' })
+        ]),
+        el('div', { class: 'card-right' }, [
+          el('p', { class: 'card-amount' }, [
+            el('span', { class: 'amount', text: S.formatYen(s.amount) }),
+            el('span', { class: 'cycle', text: ' / ' + S.cycleText(s) })
+          ]),
+          el('span', { class: badgeClass, text: S.daysLeftLabel(n) })
+        ])
       ]),
       soon ? el('p', { class: 'soon-label', text: 'まもなく更新' }) : null,
-      el('p', { class: 'card-amount' }, [
-        el('span', { class: 'amount', text: S.formatYen(s.amount) }),
-        el('span', { class: 'cycle', text: ' / ' + S.cycleText(s) })
-      ]),
       monthlyNote,
       el('dl', { class: 'card-meta' }, meta),
       s.notes ? el('p', { class: 'card-notes', text: s.notes }) : null,

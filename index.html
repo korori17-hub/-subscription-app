@@ -5,14 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>サブスク管理</title>
   <meta name="description" content="サブスクの金額と更新日を、この端末の中だけで管理するアプリ">
-  <meta name="theme-color" content="#2f6f73" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#14201f" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#101015">
+  <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="サブスク管理">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
@@ -24,12 +23,13 @@
 
   <header class="app-header">
     <div class="app-header-inner">
-      <img src="icons/icon.svg" alt="" width="36" height="36" class="app-logo">
-      <div>
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16" rx="3"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span>
         <h1 class="app-title">サブスク管理</h1>
-        <p class="app-lead">データはこの端末の中だけに保存されます</p>
       </div>
+      <span class="app-catch">月々を、スマートに</span>
     </div>
+    <p class="app-lead">データはこの端末の中だけに保存されます</p>
   </header>
 
   <main id="main" class="container">
@@ -42,25 +42,20 @@
         保存データが壊れていたため読み込めませんでした。バックアップ（JSON）があれば「バックアップを読み込む」から復元してください。
       </div>
 
+      <section class="hero" aria-label="合計">
+        <p class="hero-eyebrow">合計月額</p>
+        <p class="hero-total-line"><span class="hero-total" id="total-monthly">¥0</span><span class="hero-per">/ 月</span></p>
+        <dl class="hero-stats">
+          <div><dt>合計年額</dt><dd id="total-yearly">¥0</dd></div>
+          <div><dt>登録</dt><dd id="total-count">0件</dd></div>
+        </dl>
+        <p class="hero-bottom"><span class="status-dot" aria-hidden="true"></span><span id="hero-insight">毎月の支出を、ひと目で。</span></p>
+      </section>
+      <p class="totals-note">週額・年額なども月あたり・年あたりに換算して合計しています。</p>
+
       <section id="banner" class="banner" role="status" aria-live="polite" hidden>
         <h2 id="banner-title" class="banner-title"></h2>
         <ul id="banner-list" class="banner-list"></ul>
-      </section>
-
-      <section class="totals" aria-label="合計">
-        <div class="total total-main">
-          <p class="total-label">合計月額</p>
-          <p class="total-value" id="total-monthly">¥0</p>
-        </div>
-        <div class="total">
-          <p class="total-label">合計年額</p>
-          <p class="total-value total-value-sub" id="total-yearly">¥0</p>
-        </div>
-        <div class="total">
-          <p class="total-label">登録数</p>
-          <p class="total-value total-value-sub" id="total-count">0件</p>
-        </div>
-        <p class="totals-note">週額・年額なども月あたり・年あたりに換算して合計しています。</p>
       </section>
 
       <section aria-labelledby="list-heading">
@@ -68,15 +63,15 @@
         <ul id="sub-list" class="card-list"></ul>
 
         <div id="empty-state" class="empty" hidden>
-          <svg class="empty-illust" viewBox="0 0 120 120" aria-hidden="true">
+          <div class="empty-symbol"><svg class="empty-illust" viewBox="0 0 120 120" aria-hidden="true">
             <rect x="18" y="26" width="84" height="76" rx="12" fill="none" stroke="currentColor" stroke-width="5"/>
             <path d="M18 46h84" stroke="currentColor" stroke-width="5"/>
             <path d="M40 16v18M80 16v18" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
             <path d="M60 60v28M48 74h24" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-          </svg>
+          </svg></div>
           <h2 class="empty-title">まだサブスクが登録されていません</h2>
           <p class="empty-text">「追加」から、使っているサービスの金額と次回更新日を登録しましょう。更新が近づくとお知らせします。</p>
-          <button type="button" id="empty-add" class="btn btn-primary btn-lg">＋ サブスクを追加</button>
+          <button type="button" id="empty-add" class="btn btn-text-accent btn-lg">＋ サブスクを追加</button>
           <button type="button" id="empty-demo" class="btn btn-link">お試し用のデモデータを入れる</button>
         </div>
       </section>
@@ -222,9 +217,11 @@
     </section>
   </main>
 
-  <button type="button" id="fab" class="fab" aria-label="サブスクを追加">
-    <span aria-hidden="true" class="fab-plus">＋</span> 追加
-  </button>
+  <div class="bottom-bar">
+    <button type="button" id="fab" class="fab">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>サブスクを追加
+    </button>
+  </div>
 
   <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <form method="dialog">
