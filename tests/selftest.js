@@ -199,4 +199,94 @@ t('ファイル名', function () {
   assert.strictEqual(C.ALL_FILE_NAME, 'サブスク全部.ics');
 });
 
-console.log('\n' + passed + ' 件のチェックが通りました' + (process.exitCode ? '（失敗あり）' : ''));
+console.log('ICS インジェクション対策');
+t('改行を含む id はインポート時に振り直され、ICS に注入されない', function () {
+  var bad = 'safe\r\nX-INJECTED:yes';
+  var json = JSON.stringify({ version: 1, subscriptions: [
+    { id: bad, name: 'A', amount: 100, cycle: 'monthly', nextRenewal: '2026-11-20', notifyDaysBefore: 3 },
+    { id: 'has space', name: 'B', amount: 100, cycle: 'monthly', nextRenewal: '2026-11-20', notifyDaysBefore: 3 },
+    { id: 'x'.repeat(81), name: 'C', amount: 100, cycle: 'monthly', nextRenewal: '2026-11-20', notifyDaysBefore: 3 },
+    { id: 'ok-id_1.2', name: 'D', amount: 100, cycle: 'monthly', nextRenewal: '2026-11-20', notifyDaysBefore: 3 }
+  ] });
+  var list = ST.importJson(json);
+  assert.strictEqual(list.length, 4);
+  list.forEach(function (x) { assert.ok(S.isSafeId(x.id), 'unsafe id: ' + JSON.stringify(x.id)); });
+  assert.notStrictEqual(list[0].id, bad);
+  assert.strictEqual(list[3].id, 'ok-id_1.2'); // 安全な id はそのまま
+  var ics = C.buildIcs(list, NOW);
+  assert.ok(ics.indexOf('X-INJECTED') < 0, '注入プロパティが出力された');
+  assert.ok(!/[^\r]\n/.test(ics) && !/\r[^\n]/.test(ics), '裸の CR/LF がある');
+  ics.split('\r\n').filter(function (l) { return /^UID:/.test(l); }).forEach(function (l) {
+    assert.ok(/^UID:[A-Za-z0-9._-]+@subkanri$/.test(l), l);
+  });
+});
+t('validate も危険な id を振り直す（新規は UUID 等の安全な id）', function () {
+  assert.ok(S.isSafeId(sub({ id: 'a\nb' }).id));
+  assert.ok(S.isSafeId(sub({}).id));
+  assert.strictEqual(sub({ id: 'keep-me' }).id, 'keep-me');
+});
+t('制御文字を含む解約URLは拒否される', function () {
+  ['https://example.com/a\r\nX-INJECTED:yes', 'https://example.com/a\nb', 'https://exa\tmple.com/', 'https://example.com/\u007F'].forEach(function (u) {
+    var r = S.validate({ name: 'a', amount: 1, cycle: 'monthly', nextRenewal: today, notifyDaysBefore: 3, cancelUrl: u });
+    assert.strictEqual(r.ok, false, JSON.stringify(u));
+    assert.ok(r.errors.cancelUrl);
+    assert.strictEqual(S.isHttpUrl(u), false);
+  });
+  var json = JSON.stringify({ version: 1, subscriptions: [
+    { name: 'A', amount: 100, cycle: 'monthly', nextRenewal: '2026-11-20', notifyDaysBefore: 3, cancelUrl: 'https://example.com/a\r\nX-INJECTED:yes' }
+  ] });
+  assert.throws(function () { ST.importJson(json); }, /解約URL/);
+});
+t('解約URLは正規化して保存し、ICS の URL: にもそのまま出す', function () {
+  var s = sub({ cancelUrl: 'HTTPS://Example.com/a b' });
+  assert.strictEqual(s.cancelUrl, 'https://example.com/a%20b');
+  var lines = C.buildIcs([s], NOW).split('\r\n');
+  assert.ok(lines.indexOf('URL:https://example.com/a%20b') > 0);
+  // 検証を経ていない生データが渡されても、URL: には不正な値を出さない
+  var raw = Object.assign({}, sub({}), { cancelUrl: 'https://example.com/a\r\nX-INJECTED:yes' });
+  assert.ok(C.buildIcs([raw], NOW).split('\r\n').every(function (l) { return !/^URL:/.test(l) && l !== 'X-INJECTED:yes'; }));
+  var raw2 = Object.assign({}, sub({}), { id: 'evil\r\nX-INJECTED:yes' });
+  assert.ok(C.buildIcs([raw2], NOW).split('\r\n').indexOf('X-INJECTED:yes') < 0);
+});
+
+// ---- 通知: 表示に成功したものだけ既送にする（Notification / localStorage をスタブ） ----
+function asyncTests() {
+  var mem = {};
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+    setItem: function (k, v) { mem[k] = String(v); },
+    removeItem: function (k) { delete mem[k]; }
+  } });
+  var failNext = 0, shown = [];
+  function FakeNotification(title) {
+    if (failNext > 0) { failNext--; throw new Error('cannot show'); }
+    shown.push(title);
+  }
+  FakeNotification.permission = 'granted';
+  globalThis.Notification = FakeNotification;
+  require(path.join(__dirname, '..', 'js', 'notifications.js'));
+  var N = SK.notifications;
+  var list = [sub({ id: 'n1', name: 'N1', nextRenewal: '2026-11-14' }), sub({ id: 'n2', name: 'N2', nextRenewal: '2026-11-15' })];
+
+  console.log('通知');
+  failNext = 1; // 1件目の表示に失敗させる
+  return N.notifyUpcoming(list, today).then(function (count) {
+    assert.strictEqual(count, 1);
+    assert.deepStrictEqual(ST.getNotified(today), ['n2|2026-11-15']);
+    return N.notifyUpcoming(list, today); // 失敗した分だけ再送される
+  }).then(function (count) {
+    assert.strictEqual(count, 1);
+    assert.deepStrictEqual(shown, ['まもなく更新: N2', 'まもなく更新: N1']);
+    assert.deepStrictEqual(ST.getNotified(today).sort(), ['n1|2026-11-14', 'n2|2026-11-15']);
+    return N.notifyUpcoming(list, today); // もう送らない
+  }).then(function (count) {
+    assert.strictEqual(count, 0);
+    passed++; console.log('  ok  失敗した通知は既送にせず、次回再送する');
+  }).catch(function (e) {
+    console.error('  NG  失敗した通知は既送にせず、次回再送する\n      ' + e.message); process.exitCode = 1;
+  });
+}
+
+asyncTests().then(function () {
+  console.log('\n' + passed + ' 件のチェックが通りました' + (process.exitCode ? '（失敗あり）' : ''));
+});

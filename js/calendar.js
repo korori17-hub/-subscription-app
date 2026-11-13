@@ -90,6 +90,12 @@
     return n === 0 ? '今日' : n + '日後';
   }
 
+  /** UID に入れる ID。検証済みのはずだが、念のため安全な文字以外を除去する */
+  function safeUid(id) {
+    var s = String(id == null ? '' : id).replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80);
+    return s || 'unknown';
+  }
+
   function eventLines(sub, now) {
     var S = root.SK.subs;
     var amount = S.formatYen(sub.amount) + '（' + S.cycleText(sub) + '）';
@@ -101,7 +107,7 @@
 
     var lines = [
       'BEGIN:VEVENT',
-      'UID:' + sub.id + '@subkanri',
+      'UID:' + safeUid(sub.id) + '@subkanri',
       'DTSTAMP:' + utcStamp(now),
       'DTSTART;VALUE=DATE:' + compactDate(sub.nextRenewal),
       'DTEND;VALUE=DATE:' + compactDate(D.addDays(sub.nextRenewal, 1)),
@@ -110,7 +116,9 @@
       'DESCRIPTION:' + escapeText(desc.join('\n')),
       'TRANSP:TRANSPARENT'
     ];
-    if (sub.cancelUrl) lines.push('URL:' + sub.cancelUrl);
+    // URL は TEXT ではない（エスケープしない）ので、正規化済みの http(s) URL だけを出す
+    var url = S.normalizeHttpUrl(sub.cancelUrl);
+    if (url) lines.push('URL:' + url);
     lines.push(
       'BEGIN:VALARM',
       'ACTION:DISPLAY',

@@ -33,12 +33,28 @@
     return parseInt(s, 10);
   }
 
+  // 改行などの制御文字（ICS インジェクションの原因になる）
+  var CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
+
   function isHttpUrl(str) {
     if (!str) return false;
+    if (CONTROL_CHARS.test(str)) return false;
     try {
       var u = new URL(str);
       return u.protocol === 'http:' || u.protocol === 'https:';
     } catch (e) { return false; }
+  }
+
+  /** http(s) URL を new URL().href で正規化。不正なら '' */
+  function normalizeHttpUrl(str) {
+    if (!isHttpUrl(str)) return '';
+    try { return new URL(str).href; } catch (e) { return ''; }
+  }
+
+  /** ID は英数字と . _ - のみ、80 文字以内（.ics の UID などにそのまま入るため） */
+  var MAX_ID_LEN = 80;
+  function isSafeId(id) {
+    return typeof id === 'string' && id.length > 0 && id.length <= MAX_ID_LEN && /^[A-Za-z0-9._-]+$/.test(id);
   }
 
   function str(v) { return v == null ? '' : String(v).trim(); }
@@ -52,7 +68,9 @@
     var errors = {};
     var v = {};
 
-    v.id = str(input.id) || newId();
+    // 不正・危険な ID（改行・空白・記号・長すぎ）は黙って振り直す（ID 重複時と同じ扱い）
+    v.id = input.id == null ? '' : String(input.id);
+    if (!isSafeId(v.id)) v.id = newId();
 
     v.name = str(input.name);
     if (!v.name) errors.name = 'サービス名を入力してください。';
@@ -90,10 +108,14 @@
     }
 
     v.cancelUrl = str(input.cancelUrl);
-    if (v.cancelUrl && !isHttpUrl(v.cancelUrl)) {
+    if (v.cancelUrl && CONTROL_CHARS.test(v.cancelUrl)) {
+      errors.cancelUrl = '解約URLに改行などの使えない文字が含まれています。';
+    } else if (v.cancelUrl && !isHttpUrl(v.cancelUrl)) {
       errors.cancelUrl = '解約URLは http:// または https:// で始まるアドレスを入力してください。';
-    } else if (v.cancelUrl.length > MAX_TEXT.cancelUrl) {
-      errors.cancelUrl = 'URLが長すぎます。';
+    } else {
+      // 保存するのは正規化済みの URL（元の文字列ではなく）
+      if (v.cancelUrl) v.cancelUrl = normalizeHttpUrl(v.cancelUrl);
+      if (v.cancelUrl.length > MAX_TEXT.cancelUrl) errors.cancelUrl = 'URLが長すぎます。';
     }
 
     v.notes = input.notes == null ? '' : String(input.notes).trim();
@@ -244,6 +266,8 @@
     DEFAULT_NOTIFY_DAYS: DEFAULT_NOTIFY_DAYS,
     newId: newId,
     isHttpUrl: isHttpUrl,
+    normalizeHttpUrl: normalizeHttpUrl,
+    isSafeId: isSafeId,
     validate: validate,
     advanceOnce: advanceOnce,
     rolledRenewal: rolledRenewal,

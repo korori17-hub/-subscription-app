@@ -265,8 +265,20 @@
     });
 
     registerServiceWorker();
-    // SW の準備を少し待ってから通知（iOS では SW 経由が必要なため）
+    // 起動直後の通知。notifyUpcoming 自体が SW の ready を待つ（iOS では SW 経由が必要）。
+    // 失敗した通知は既送にならず、次回の呼び出しで再送される。
     setTimeout(function () { notif.notifyUpcoming(state.subs, state.today); }, 800);
+
+    // 開いたまま東京時間の日付が変わったときに追従する（タイマーは1つだけ）
+    setInterval(checkDateChange, 60 * 1000);
+  }
+
+  function checkDateChange() {
+    if (D.todayTokyo() === state.today) return;
+    refreshToday();
+    if (!ui.$('#view-home').hidden) renderHome();
+    // 非表示中は notifyUpcoming 内の visibility チェックで何もしない
+    notif.notifyUpcoming(state.subs, state.today);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
