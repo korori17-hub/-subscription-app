@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+Thumbs.db
+# エディタ
+.vscode/
+.idea/
+*.swp
+# ローカルで書き出したバックアップ・カレンダー（個人データを誤ってコミットしないため）
+*.ics
+サブスク管理_バックアップ_*.json
+backup*.json
+# その他
+node_modules/
+*.log

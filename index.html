@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>サブスク管理</title>
+  <meta name="description" content="サブスクの金額と更新日を、この端末の中だけで管理するアプリ">
+  <meta name="theme-color" content="#2f6f73" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14201f" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="サブスク管理">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+
+  <header class="app-header">
+    <div class="app-header-inner">
+      <img src="icons/icon.svg" alt="" width="36" height="36" class="app-logo">
+      <div>
+        <h1 class="app-title">サブスク管理</h1>
+        <p class="app-lead">データはこの端末の中だけに保存されます</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <!-- ================= ホーム ================= -->
+    <section id="view-home" aria-label="ホーム">
+      <div id="storage-warning" class="alert alert-danger" role="alert" hidden>
+        このブラウザではデータを保存できません（プライベートブラウズ等）。閉じると入力内容が消えます。
+      </div>
+      <div id="corrupt-warning" class="alert alert-danger" role="alert" hidden>
+        保存データが壊れていたため読み込めませんでした。バックアップ（JSON）があれば「バックアップを読み込む」から復元してください。
+      </div>
+
+      <section id="banner" class="banner" role="status" aria-live="polite" hidden>
+        <h2 id="banner-title" class="banner-title"></h2>
+        <ul id="banner-list" class="banner-list"></ul>
+      </section>
+
+      <section class="totals" aria-label="合計">
+        <div class="total total-main">
+          <p class="total-label">合計月額</p>
+          <p class="total-value" id="total-monthly">¥0</p>
+        </div>
+        <div class="total">
+          <p class="total-label">合計年額</p>
+          <p class="total-value total-value-sub" id="total-yearly">¥0</p>
+        </div>
+        <div class="total">
+          <p class="total-label">登録数</p>
+          <p class="total-value total-value-sub" id="total-count">0件</p>
+        </div>
+        <p class="totals-note">週額・年額なども月あたり・年あたりに換算して合計しています。</p>
+      </section>
+
+      <section aria-labelledby="list-heading">
+        <h2 id="list-heading" class="section-title">次回更新が近い順</h2>
+        <ul id="sub-list" class="card-list"></ul>
+
+        <div id="empty-state" class="empty" hidden>
+          <svg class="empty-illust" viewBox="0 0 120 120" aria-hidden="true">
+            <rect x="18" y="26" width="84" height="76" rx="12" fill="none" stroke="currentColor" stroke-width="5"/>
+            <path d="M18 46h84" stroke="currentColor" stroke-width="5"/>
+            <path d="M40 16v18M80 16v18" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+            <path d="M60 60v28M48 74h24" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+          </svg>
+          <h2 class="empty-title">まだサブスクが登録されていません</h2>
+          <p class="empty-text">「追加」から、使っているサービスの金額と次回更新日を登録しましょう。更新が近づくとお知らせします。</p>
+          <button type="button" id="empty-add" class="btn btn-primary btn-lg">＋ サブスクを追加</button>
+          <button type="button" id="empty-demo" class="btn btn-link">お試し用のデモデータを入れる</button>
+        </div>
+      </section>
+
+      <!-- ================= 設定 ================= -->
+      <section class="settings" aria-labelledby="settings-title">
+        <h2 id="settings-title" class="section-title">設定・書き出し</h2>
+
+        <div class="panel">
+          <h3 class="panel-title">カレンダーに書き出す（おすすめ）</h3>
+          <p>iPhoneのカレンダーに書き出すと、更新の何日前に確実に知らせてくれます。書き出したファイルを開いてカレンダーに追加してください。</p>
+          <p class="hint">毎回の更新日が繰り返しの予定として入り、「通知」で決めた日数前の朝9時にお知らせが出ます。</p>
+          <button type="button" id="export-all-ics" class="btn btn-secondary btn-block">すべてをカレンダーに書き出す</button>
+        </div>
+
+        <div class="panel">
+          <h3 class="panel-title">ブラウザの通知</h3>
+          <p id="notify-status" class="notify-status"></p>
+          <button type="button" id="notify-permission" class="btn btn-secondary btn-block" hidden>通知を許可する</button>
+          <p class="hint">アプリを開いたときに、更新が近いサブスクをお知らせします（同じ内容は1日1回まで）。iPhoneでは、ホーム画面に追加したアプリからしか通知できないことが多いです。</p>
+        </div>
+
+        <div class="panel">
+          <h3 class="panel-title">バックアップ</h3>
+          <p>データはこのブラウザの中だけにあります。機種変更やSafariのデータ削除で消えるので、ときどき書き出して保管してください。</p>
+          <div class="btn-row">
+            <button type="button" id="export-json" class="btn btn-secondary">バックアップを書き出す</button>
+            <button type="button" id="import-json" class="btn btn-secondary">バックアップを読み込む</button>
+          </div>
+          <div id="import-error" class="alert alert-danger" role="alert" hidden></div>
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+        </div>
+
+        <div class="panel">
+          <h3 class="panel-title">ホーム画面に追加</h3>
+          <ol class="steps">
+            <li>iPhoneのSafariでこのページを開く</li>
+            <li>画面下の<strong>共有ボタン</strong>（四角から矢印が出たマーク）をタップ</li>
+            <li><strong>「ホーム画面に追加」</strong>を選ぶ</li>
+          </ol>
+          <p class="hint">アプリのように起動でき、電波がない場所でも使えます。</p>
+        </div>
+
+        <div class="panel">
+          <h3 class="panel-title">デモデータ</h3>
+          <p>使い方を試すための架空のデータ（「デモ：」で始まる名前）を入れます。入れたあとは普通に編集・削除できます。</p>
+          <button type="button" id="demo-data" class="btn btn-secondary btn-block">デモデータを入れる</button>
+        </div>
+
+        <p class="privacy-note">このアプリはカード番号・パスワード・ログイン情報を扱いません。入力した内容は外部に送信されません。</p>
+      </section>
+    </section>
+
+    <!-- ================= 追加・編集フォーム ================= -->
+    <section id="view-form" aria-labelledby="form-title" hidden>
+      <div class="form-header">
+        <button type="button" id="form-back" class="btn btn-link btn-back" aria-label="戻る">‹ 戻る</button>
+        <h2 id="form-title" class="form-title" tabindex="-1">サブスクを追加</h2>
+      </div>
+
+      <form id="sub-form" novalidate autocomplete="off">
+        <p class="alert alert-warning form-caution" role="note">
+          <strong>ご注意：</strong>カード番号・パスワード・ログイン情報は入力しないでください。支払い方法は『クレカ（楽天）』のような名前だけにしてください。
+        </p>
+
+        <p id="form-error-summary" class="alert alert-danger" role="alert" hidden></p>
+
+        <div class="field" data-field="name">
+          <label for="f-name">サービス名 <span class="req">必須</span></label>
+          <input id="f-name" name="name" type="text" maxlength="60" required aria-describedby="err-name" placeholder="例：動画配信サービス">
+          <p id="err-name" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="amount">
+          <label for="f-amount">金額（円） <span class="req">必須</span></label>
+          <div class="input-prefix">
+            <span aria-hidden="true">¥</span>
+            <input id="f-amount" name="amount" type="text" inputmode="numeric" pattern="[0-9]*" required aria-describedby="err-amount" placeholder="例：990">
+          </div>
+          <p id="err-amount" class="field-error" hidden></p>
+        </div>
+
+        <fieldset class="field" data-field="cycle">
+          <legend>支払い周期 <span class="req">必須</span></legend>
+          <div class="segmented">
+            <input type="radio" id="c-weekly" name="cycle" value="weekly"><label for="c-weekly">週額</label>
+            <input type="radio" id="c-monthly" name="cycle" value="monthly" checked><label for="c-monthly">月額</label>
+            <input type="radio" id="c-yearly" name="cycle" value="yearly"><label for="c-yearly">年額</label>
+            <input type="radio" id="c-custom" name="cycle" value="custom"><label for="c-custom">その他</label>
+          </div>
+          <p id="err-cycle" class="field-error" hidden></p>
+        </fieldset>
+
+        <div class="field" id="custom-interval-group" data-field="customIntervalDays" hidden>
+          <label for="f-interval">何日ごとに更新しますか <span class="req">必須</span></label>
+          <div class="input-suffix">
+            <input id="f-interval" name="customIntervalDays" type="text" inputmode="numeric" pattern="[0-9]*" aria-describedby="err-customIntervalDays" placeholder="例：90">
+            <span>日ごと</span>
+          </div>
+          <p id="err-customIntervalDays" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="nextRenewal">
+          <label for="f-next">次回更新日 <span class="req">必須</span></label>
+          <input id="f-next" name="nextRenewal" type="date" required aria-describedby="err-nextRenewal">
+          <p id="err-nextRenewal" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="notifyDaysBefore">
+          <label for="f-notify">何日前に知らせますか <span class="req">必須</span></label>
+          <div class="input-suffix">
+            <input id="f-notify" name="notifyDaysBefore" type="text" inputmode="numeric" pattern="[0-9]*" required aria-describedby="hint-notify err-notifyDaysBefore">
+            <span>日前</span>
+          </div>
+          <p id="hint-notify" class="hint">0にすると当日にお知らせします。</p>
+          <p id="err-notifyDaysBefore" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="paymentMethod">
+          <label for="f-payment">支払い方法 <span class="opt">任意</span></label>
+          <input id="f-payment" name="paymentMethod" type="text" maxlength="40" aria-describedby="hint-payment err-paymentMethod" placeholder="例：クレカ（楽天）、口座振替">
+          <p id="hint-payment" class="hint">名前だけを入力してください（番号は入れないでください）。</p>
+          <p id="err-paymentMethod" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="cancelUrl">
+          <label for="f-url">解約ページのURL <span class="opt">任意</span></label>
+          <input id="f-url" name="cancelUrl" type="url" inputmode="url" autocapitalize="off" spellcheck="false" aria-describedby="err-cancelUrl" placeholder="https://">
+          <p id="err-cancelUrl" class="field-error" hidden></p>
+        </div>
+
+        <div class="field" data-field="notes">
+          <label for="f-notes">メモ <span class="opt">任意</span></label>
+          <textarea id="f-notes" name="notes" rows="3" maxlength="1000" aria-describedby="err-notes" placeholder="例：家族で共有、年末に見直す"></textarea>
+          <p id="err-notes" class="field-error" hidden></p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="form-submit" class="btn btn-primary btn-lg">追加する</button>
+          <button type="button" id="form-cancel" class="btn btn-secondary btn-lg">キャンセル</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <button type="button" id="fab" class="fab" aria-label="サブスクを追加">
+    <span aria-hidden="true" class="fab-plus">＋</span> 追加
+  </button>
+
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog">
+      <h2 id="confirm-title" class="dialog-title"></h2>
+      <p id="confirm-message" class="dialog-message"></p>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" id="confirm-cancel" class="btn btn-secondary">キャンセル</button>
+        <button type="submit" value="ok" id="confirm-ok" class="btn btn-primary">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/dates.js"></script>
+  <script src="js/subscriptions.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/form.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
