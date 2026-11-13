@@ -51,7 +51,7 @@
         </dl>
         <p class="hero-bottom"><span class="status-dot" aria-hidden="true"></span><span id="hero-insight">毎月の支出を、ひと目で。</span></p>
       </section>
-      <p class="totals-note">週額・年額なども月あたり・年あたりに換算して合計しています。</p>
+      <p id="totals-note" class="totals-note">週額・年額なども月あたり・年あたりに換算して合計しています。</p>
 
       <section id="banner" class="banner" role="status" aria-live="polite" hidden>
         <h2 id="banner-title" class="banner-title"></h2>
@@ -79,6 +79,14 @@
       <!-- ================= 設定 ================= -->
       <section class="settings" aria-labelledby="settings-title">
         <h2 id="settings-title" class="section-title">設定・書き出し</h2>
+
+        <div class="panel">
+          <h3 class="panel-title">米ドルの換算レート（目安）</h3>
+          <label for="usd-jpy-rate">1米ドルあたりの円（目安）</label>
+          <div class="rate-input"><span>1米ドル =</span><input id="usd-jpy-rate" type="text" inputmode="decimal" value="159" aria-describedby="rate-hint rate-error"><span>円</span></div>
+          <p id="rate-hint" class="hint">合計は目安のレートで円換算しており、実際の請求額・カード会社のレートとは異なる場合があります。</p>
+          <p id="rate-error" class="field-error" role="alert" hidden></p>
+        </div>
 
         <div class="panel">
           <h3 class="panel-title">カレンダーに書き出す（おすすめ）</h3>
@@ -145,11 +153,19 @@
           <p id="err-name" class="field-error" hidden></p>
         </div>
 
+        <fieldset class="field" data-field="currency">
+          <legend>通貨</legend>
+          <div class="segmented currency-segmented">
+            <input type="radio" id="currency-jpy" name="currency" value="JPY" checked><label for="currency-jpy">円 (JPY)</label>
+            <input type="radio" id="currency-usd" name="currency" value="USD"><label for="currency-usd">米ドル (USD)</label>
+          </div>
+        </fieldset>
+
         <div class="field" data-field="amount">
-          <label for="f-amount">金額（円） <span class="req">必須</span></label>
+          <label for="f-amount"><span id="amount-label">金額（円）</span> <span class="req">必須</span></label>
           <div class="input-prefix">
-            <span aria-hidden="true">¥</span>
-            <input id="f-amount" name="amount" type="text" inputmode="numeric" pattern="[0-9]*" required aria-describedby="err-amount" placeholder="例：990">
+            <span id="amount-prefix" aria-hidden="true">¥</span>
+            <input id="f-amount" name="amount" type="text" inputmode="numeric" required aria-describedby="err-amount" placeholder="例：990">
           </div>
           <p id="err-amount" class="field-error" hidden></p>
         </div>
@@ -175,8 +191,9 @@
         </div>
 
         <div class="field" data-field="nextRenewal">
-          <label for="f-next">次回更新日 <span class="req">必須</span></label>
-          <input id="f-next" name="nextRenewal" type="date" required aria-describedby="err-nextRenewal">
+          <label for="f-next">次回更新日</label>
+          <input id="f-next" name="nextRenewal" type="date" aria-describedby="renewal-hint err-nextRenewal">
+          <p id="renewal-hint" class="hint">わからないときは空欄のままにしてください（更新日未確認として表示されます）。</p>
           <p id="err-nextRenewal" class="field-error" hidden></p>
         </div>
 

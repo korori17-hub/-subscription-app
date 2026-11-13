@@ -9,11 +9,13 @@
   var ui = root.SK.ui;
   var el = ui.el;
 
-  function renderTotals(list) {
-    var t = S.totals(list);
+  function renderTotals(list, rate) {
+    var t = S.totals(list, rate);
     ui.$('#total-monthly').textContent = S.formatYen(t.monthly);
     ui.$('#total-yearly').textContent = S.formatYen(t.yearly);
     ui.$('#total-count').textContent = t.count + '件';
+    ui.$('#totals-note').textContent = '週額・年額なども月あたり・年あたりに換算して合計しています。' +
+      (list.some(function (s) { return s.currency === 'USD'; }) ? ' 合計には米ドル建ての金額を目安レートで円換算した分が含まれます（1ドル＝' + rate.toLocaleString('ja-JP') + '円）。' : '');
   }
 
   function renderBanner(list, today) {
@@ -39,12 +41,12 @@
     return first.toUpperCase();
   }
 
-  function card(s, today, handlers) {
+  function card(s, today, handlers, rate) {
     var n = S.daysLeft(s, today);
     var soon = S.isInNotifyWindow(s, today);
     var badgeClass = 'badge' + (n === 0 ? ' badge-today' : soon ? ' badge-soon' : '');
     var monthlyNote = s.cycle !== 'monthly'
-      ? el('p', { class: 'card-sub', text: '月あたり 約' + S.formatYen(S.monthlyCost(s)) })
+      ? el('p', { class: 'card-sub', text: '月あたり 約' + S.formatYen(S.toYen(S.monthlyCost(s), s.currency, rate)) })
       : null;
 
     var actions = [
@@ -72,11 +74,11 @@
         el('span', { class: 'monogram', 'aria-hidden': 'true', text: monogram(s.name) }),
         el('div', { class: 'card-info' }, [
           el('h3', { class: 'card-title', text: s.name }),
-          el('p', { class: 'card-renewal', text: D.formatJa(s.nextRenewal) + ' 更新' })
+          el('p', { class: 'card-renewal', text: s.nextRenewal ? D.formatJa(s.nextRenewal) + ' 更新' : '更新日未確認' })
         ]),
         el('div', { class: 'card-right' }, [
           el('p', { class: 'card-amount' }, [
-            el('span', { class: 'amount', text: S.formatYen(s.amount) }),
+            el('span', { class: 'amount', text: S.formatAmount(s.amount, s.currency) }),
             el('span', { class: 'cycle', text: ' / ' + S.cycleText(s) })
           ]),
           el('span', { class: badgeClass, text: S.daysLeftLabel(n) })
@@ -90,7 +92,7 @@
     ]);
   }
 
-  function renderList(list, today, handlers) {
+  function renderList(list, today, handlers, rate) {
     var ul = ui.$('#sub-list');
     var empty = ui.$('#empty-state');
     var sorted = S.sortByRenewal(list);
@@ -98,13 +100,14 @@
     ui.$('#list-heading').hidden = sorted.length === 0;
     ui.$('#export-all-ics').disabled = sorted.length === 0;
     ui.$('#export-json').disabled = sorted.length === 0;
-    ul.replaceChildren.apply(ul, sorted.map(function (s) { return card(s, today, handlers); }));
+    ul.replaceChildren.apply(ul, sorted.map(function (s) { return card(s, today, handlers, rate); }));
   }
 
-  function renderHome(list, today, handlers) {
-    renderTotals(list);
+  function renderHome(list, today, handlers, rate) {
+    rate = S.validRate(rate) ? rate : S.DEFAULT_USD_JPY_RATE;
+    renderTotals(list, rate);
     renderBanner(list, today);
-    renderList(list, today, handlers);
+    renderList(list, today, handlers, rate);
   }
 
   root.SK.views = { renderHome: renderHome };

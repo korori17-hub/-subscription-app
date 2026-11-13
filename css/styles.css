@@ -596,3 +596,8 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+.currency-segmented { grid-template-columns: repeat(2, 1fr); }
+.rate-input { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.rate-input input { width: 8em; min-width: 0; }
+.rate-input span { white-space: nowrap; color: var(--text-muted); }

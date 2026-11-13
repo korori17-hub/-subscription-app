@@ -54,6 +54,7 @@
   /** 周期 → RRULE */
   function rrule(sub) {
     var p = D.parse(sub.nextRenewal);
+    if (!p) return '';
     var anchor = sub.anchorDay || p.d;
     switch (sub.cycle) {
       case 'weekly':
@@ -98,7 +99,7 @@
 
   function eventLines(sub, now) {
     var S = root.SK.subs;
-    var amount = S.formatYen(sub.amount) + '（' + S.cycleText(sub) + '）';
+    var amount = S.formatAmount(sub.amount, sub.currency) + '（' + S.cycleText(sub) + '）';
     var desc = ['金額: ' + amount];
     if (sub.paymentMethod) desc.push('支払い方法: ' + sub.paymentMethod);
     if (sub.cancelUrl) desc.push('解約ページ: ' + sub.cancelUrl);
@@ -112,7 +113,7 @@
       'DTSTART;VALUE=DATE:' + compactDate(sub.nextRenewal),
       'DTEND;VALUE=DATE:' + compactDate(D.addDays(sub.nextRenewal, 1)),
       'RRULE:' + rrule(sub),
-      'SUMMARY:' + escapeText('【更新】' + sub.name + ' ' + S.formatYen(sub.amount)),
+      'SUMMARY:' + escapeText('【更新】' + sub.name + ' ' + S.formatAmount(sub.amount, sub.currency)),
       'DESCRIPTION:' + escapeText(desc.join('\n')),
       'TRANSP:TRANSPARENT'
     ];
@@ -140,7 +141,7 @@
       'METHOD:PUBLISH',
       'X-WR-CALNAME:' + escapeText('サブスク更新日')
     ];
-    list.forEach(function (s) { lines = lines.concat(eventLines(s, now)); });
+    list.forEach(function (s) { if (D.isValid(s.nextRenewal)) lines = lines.concat(eventLines(s, now)); });
     lines.push('END:VCALENDAR');
     return lines.map(foldLine).join('\r\n') + '\r\n';
   }

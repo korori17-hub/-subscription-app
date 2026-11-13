@@ -99,7 +99,7 @@
       try {
         p = show('まもなく更新: ' + s.name,
           when + '（' + root.SK.dates.formatJa(s.nextRenewal, { short: true }) + '）に ' +
-          S.formatYen(s.amount) + ' が更新されます。',
+          S.formatAmount(s.amount, s.currency) + ' が更新されます。',
           'subkanri-' + s.id + '-' + s.nextRenewal);
       } catch (e) {
         p = Promise.reject(e);

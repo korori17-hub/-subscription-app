@@ -13,14 +13,14 @@
   var views = root.SK.views;
   var form = root.SK.form;
 
-  var state = { subs: [], today: D.todayTokyo() };
+  var state = { subs: [], settings: { usdJpyRate: S.DEFAULT_USD_JPY_RATE }, today: D.todayTokyo() };
   var cameFromHome = false;
   var homeScrollY = 0;
 
   /* ---------- データ ---------- */
 
   function persist() {
-    if (!store.save(state.subs)) {
+    if (!store.save(state.subs, state.settings)) {
       ui.toast('保存できませんでした。ブラウザの設定（プライベートブラウズ等）を確認してください。');
       return false;
     }
@@ -49,6 +49,7 @@
     ics: function (id) {
       var s = findSub(id);
       if (!s) return;
+      if (!s.nextRenewal) { ui.toast('更新日が未確認のためカレンダーに書き出せません'); return; }
       ui.downloadText(cal.buildIcs([s]), cal.fileNameFor(s), 'text/calendar');
       ui.toast('カレンダー用ファイルを書き出しました。開いてカレンダーに追加してください。');
     },
@@ -71,7 +72,8 @@
   };
 
   function renderHome() {
-    views.renderHome(state.subs, state.today, cardHandlers);
+    views.renderHome(state.subs, state.today, cardHandlers, state.settings.usdJpyRate);
+    ui.$('#usd-jpy-rate').value = state.settings.usdJpyRate;
     renderNotifyStatus();
   }
 
@@ -144,6 +146,22 @@
   /* ---------- 設定エリア ---------- */
 
   function bindSettings() {
+    ui.$('#usd-jpy-rate').addEventListener('change', function (e) {
+      var text = e.target.value.trim();
+      var rate = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : NaN;
+      var error = ui.$('#rate-error');
+      if (!S.validRate(rate)) {
+        error.textContent = 'レートは0より大きく10000以下の数値で入力してください。';
+        error.hidden = false;
+        e.target.setAttribute('aria-invalid', 'true');
+        return;
+      }
+      error.hidden = true;
+      e.target.removeAttribute('aria-invalid');
+      state.settings.usdJpyRate = rate;
+      persist();
+      renderHome();
+    });
     ui.$('#fab').addEventListener('click', function () { go('#/new'); });
     ui.$('#empty-add').addEventListener('click', function () { go('#/new'); });
 
@@ -158,14 +176,16 @@
     });
 
     ui.$('#export-all-ics').addEventListener('click', function () {
-      if (!state.subs.length) return;
-      ui.downloadText(cal.buildIcs(S.sortByRenewal(state.subs)), cal.ALL_FILE_NAME, 'text/calendar');
-      ui.toast(state.subs.length + '件をカレンダー用ファイルに書き出しました。');
+      var dated = state.subs.filter(function (s) { return !!s.nextRenewal; });
+      if (!dated.length) { ui.toast('更新日が確認できるサブスクがないためカレンダーに書き出せません。'); return; }
+      ui.downloadText(cal.buildIcs(S.sortByRenewal(dated)), cal.ALL_FILE_NAME, 'text/calendar');
+      var skipped = state.subs.length - dated.length;
+      ui.toast(dated.length + '件を書き出しました' + (skipped ? '（更新日未確認の' + skipped + '件は除く）' : '。'));
     });
 
     ui.$('#export-json').addEventListener('click', function () {
       var stamp = state.today.replace(/-/g, '');
-      ui.downloadText(store.exportJson(state.subs), 'サブスク管理_バックアップ_' + stamp + '.json', 'application/json');
+      ui.downloadText(store.exportJson(state.subs, null, state.settings), 'サブスク管理_バックアップ_' + stamp + '.json', 'application/json');
       ui.toast('バックアップを書き出しました。');
     });
 
@@ -183,13 +203,13 @@
       reader.onload = function () {
         var imported;
         try {
-          imported = store.importJson(reader.result);
+          imported = store.importJson(reader.result, true);
         } catch (e) {
           showImportError(e.message);
           return;
         }
         ui.$('#import-error').hidden = true;
-        var msg = imported.length + '件のデータが見つかりました。';
+        var msg = imported.subscriptions.length + '件のデータが見つかりました。';
         var p = state.subs.length
           ? ui.confirmDialog({
             title: '今のデータを置き換えますか？',
@@ -200,11 +220,12 @@
           : ui.confirmDialog({ title: 'バックアップを読み込みますか？', message: msg, okLabel: '読み込む' });
         p.then(function (ok) {
           if (!ok) return;
-          state.subs = imported;
+          state.subs = imported.subscriptions;
+          state.settings = imported.settings;
           refreshToday();
           persist();
           renderHome();
-          ui.toast(imported.length + '件を読み込みました。');
+          ui.toast(imported.subscriptions.length + '件を読み込みました。');
         });
       };
       reader.readAsText(file);
@@ -248,6 +269,7 @@
 
     var loaded = store.load();
     state.subs = loaded.subscriptions;
+    state.settings = loaded.settings;
     if (loaded.corrupted) ui.$('#corrupt-warning').hidden = false;
 
     form.init({ onSave: onSave, onCancel: backToHome });

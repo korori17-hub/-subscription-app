@@ -119,7 +119,7 @@ console.log('入力チェック');
 t('必須・形式', function () {
   var r = S.validate({ name: ' ', amount: '-1', cycle: 'custom', customIntervalDays: '0', nextRenewal: '', cancelUrl: 'javascript:alert(1)', notifyDaysBefore: '-1' });
   assert.strictEqual(r.ok, false);
-  ['name', 'amount', 'customIntervalDays', 'nextRenewal', 'cancelUrl', 'notifyDaysBefore'].forEach(function (k) {
+  ['name', 'amount', 'customIntervalDays', 'cancelUrl', 'notifyDaysBefore'].forEach(function (k) {
     assert.ok(r.errors[k], k + ' のエラーがない');
   });
   assert.ok(S.validate({ name: 'a', amount: '1.5', cycle: 'monthly', nextRenewal: today, notifyDaysBefore: 3 }).errors.amount);
@@ -247,6 +247,81 @@ t('解約URLは正規化して保存し、ICS の URL: にもそのまま出す'
   assert.ok(C.buildIcs([raw], NOW).split('\r\n').every(function (l) { return !/^URL:/.test(l) && l !== 'X-INJECTED:yes'; }));
   var raw2 = Object.assign({}, sub({}), { id: 'evil\r\nX-INJECTED:yes' });
   assert.ok(C.buildIcs([raw2], NOW).split('\r\n').indexOf('X-INJECTED:yes') < 0);
+});
+
+console.log('通貨・レート・更新日未確認');
+t('通貨の正規化と金額表示・精度', function () {
+  [undefined, '', 'EUR', 'usd'].forEach(function (currency) { assert.strictEqual(sub({ currency: currency }).currency, 'JPY'); });
+  assert.strictEqual(S.formatAmount(1180, 'JPY'), '¥1,180');
+  assert.strictEqual(S.formatAmount(22, 'USD'), '$22.00');
+  assert.strictEqual(S.formatAmount(9.5, 'USD'), '$9.50');
+  assert.strictEqual(sub({ currency: 'USD', amount: '$１,２３４.５０' }).amount, 1234.5);
+  ['9.501', '-1', 'Infinity', ''].forEach(function (amount) {
+    assert.ok(S.validate({ name: 'X', currency: 'USD', amount: amount, cycle: 'monthly', notifyDaysBefore: 3 }).errors.amount);
+  });
+  assert.ok(S.validate({ name: 'X', amount: '1.5', cycle: 'monthly', notifyDaysBefore: 3 }).errors.amount);
+});
+t('159円の換算・レート変更・合算後の丸め', function () {
+  var list = [sub({ amount: 22, currency: 'USD' }), sub({ amount: 22, currency: 'USD' }), sub({ amount: 1000 })];
+  assert.deepStrictEqual(S.totals(list), { monthly: 7996, yearly: 95952, count: 3 });
+  assert.deepStrictEqual(S.totals(list, 159), S.totals(list));
+  assert.strictEqual(S.totals(list, 160.5).monthly, 8062);
+  assert.strictEqual(S.totals([sub({ currency: 'USD', amount: 0.01 }), sub({ currency: 'USD', amount: 0.01 })], 125).monthly, 3);
+  [0, -1, NaN, Infinity, 10001, '159'].forEach(function (r) { assert.strictEqual(S.validRate(r), false); });
+  assert.ok(S.validRate(159.5));
+});
+t('custom 28日の換算・繰り上げ・ICS', function () {
+  var x = sub({ amount: 3500, cycle: 'custom', customIntervalDays: 28, nextRenewal: '2026-11-01' });
+  assert.strictEqual(S.monthlyCost(x), (3500 / 28) * 365.25 / 12);
+  assert.strictEqual(S.yearlyCost(x), (3500 / 28) * 365.25);
+  assert.strictEqual(S.totals([x]).monthly, Math.round(S.monthlyCost(x)));
+  assert.strictEqual(S.totals([x]).yearly, Math.round(S.yearlyCost(x)));
+  assert.strictEqual(S.rolledRenewal(x, today), '2026-11-29');
+  assert.ok(C.buildIcs([x]).includes('RRULE:FREQ=DAILY;INTERVAL=28'));
+});
+t('更新日未確認の検証・通知・並び順・繰り上げ', function () {
+  [undefined, '', '   '].forEach(function (date) {
+    var x = sub({ nextRenewal: date });
+    assert.strictEqual(x.nextRenewal, '');
+    assert.strictEqual(S.daysLeft(x, today), null);
+    assert.strictEqual(S.isInNotifyWindow(x, today), false);
+    assert.strictEqual(S.rolledRenewal(x, today), '');
+    assert.strictEqual(S.rollForwardAll([x], today).changed, false);
+    assert.strictEqual(S.rollForwardAll([x], today).list[0].nextRenewal, '');
+    assert.strictEqual(S.totals([x]).count, 1);
+  });
+  assert.ok(S.validate({ name: 'X', amount: 1, cycle: 'monthly', nextRenewal: '2026-02-29', notifyDaysBefore: 3 }).errors.nextRenewal);
+  var list = [sub({ name: 'Z', nextRenewal: '' }), sub({ name: 'Later', nextRenewal: '2026-12-01' }), sub({ name: 'A', nextRenewal: '' }), sub({ name: 'Near', nextRenewal: today })];
+  assert.deepStrictEqual(S.sortByRenewal(list).map(function (x) { return x.name; }), ['Near', 'Later', 'A', 'Z']);
+});
+t('日付なしのICSはスキップし、USDの金額を維持', function () {
+  var unknown = sub({ nextRenewal: '' });
+  assert.strictEqual(C.rrule(unknown), '');
+  assert.ok(!C.buildIcs([unknown]).includes('BEGIN:VEVENT'));
+  var ics = C.buildIcs([unknown, sub({ currency: 'USD', amount: 22 })]);
+  assert.strictEqual(ics.split('BEGIN:VEVENT').length - 1, 1);
+  assert.ok(ics.includes('$22.00'));
+});
+t('古いバックアップと設定の保存・復元', function () {
+  var old = { version: 1, subscriptions: [{ name: 'Old', amount: 1000, cycle: 'monthly', nextRenewal: today, notifyDaysBefore: 3 }] };
+  assert.strictEqual(ST.importJson(JSON.stringify(old))[0].currency, 'JPY');
+  assert.strictEqual(ST.importJson(JSON.stringify(old), true).settings.usdJpyRate, 159);
+  var list = [sub({ currency: 'USD', amount: 9.5, nextRenewal: '' })];
+  var backup = ST.importJson(ST.exportJson(list, NOW, { usdJpyRate: 160.5 }), true);
+  assert.deepStrictEqual(backup, { subscriptions: list, settings: { usdJpyRate: 160.5 } });
+  var mem = {};
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: function (key) { return mem[key] || null; },
+    setItem: function (key, value) { mem[key] = value; }
+  } });
+  assert.strictEqual(ST.load().settings.usdJpyRate, 159);
+  assert.ok(ST.save(list, backup.settings));
+  assert.deepStrictEqual(ST.load(), { subscriptions: list, settings: backup.settings, corrupted: false });
+  assert.strictEqual(JSON.parse(mem[ST.STORAGE_KEY]).version, 1);
+  mem[ST.STORAGE_KEY] = JSON.stringify(old);
+  assert.strictEqual(ST.load().settings.usdJpyRate, 159);
+  assert.strictEqual(ST.load().subscriptions[0].currency, 'JPY');
+  assert.throws(function () { ST.importJson(JSON.stringify({ version: 1, subscriptions: [list[0], { name: 'invalid' }] })); });
 });
 
 // ---- 通知: 表示に成功したものだけ既送にする（Notification / localStorage をスタブ） ----

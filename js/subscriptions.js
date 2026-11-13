@@ -10,6 +10,15 @@
   var CYCLES = ['weekly', 'monthly', 'yearly', 'custom'];
   var CYCLE_LABELS = { weekly: '週額', monthly: '月額', yearly: '年額', custom: 'その他' };
   var DEFAULT_NOTIFY_DAYS = 3;
+  var DEFAULT_USD_JPY_RATE = 159;
+
+  function validRate(rate) {
+    return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 && rate <= 10000;
+  }
+
+  function toYen(amount, currency, rate) {
+    return currency === 'USD' ? amount * (validRate(rate) ? rate : DEFAULT_USD_JPY_RATE) : amount;
+  }
   var MAX_AMOUNT = 100000000; // 1億円（入力ミス防止の上限）
   var MAX_TEXT = { name: 60, paymentMethod: 40, cancelUrl: 2000, notes: 1000 };
 
@@ -24,7 +33,7 @@
     if (v == null) return '';
     return String(v)
       .replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
-      .replace(/[,，\s円¥￥]/g, '');
+      .replace(/[,，\s円¥￥$＄]/g, '');
   }
 
   function parseNonNegInt(v) {
@@ -76,9 +85,13 @@
     if (!v.name) errors.name = 'サービス名を入力してください。';
     else if (v.name.length > MAX_TEXT.name) errors.name = 'サービス名は' + MAX_TEXT.name + '文字以内にしてください。';
 
-    v.amount = parseNonNegInt(input.amount);
+    v.currency = input.currency === 'USD' ? 'USD' : 'JPY';
+    var amountText = normalizeNumberText(input.amount);
+    v.amount = v.currency === 'USD'
+      ? (/^\d+(?:\.\d{1,2})?$/.test(amountText) ? Number(amountText) : NaN)
+      : parseNonNegInt(input.amount);
     if (str(input.amount) === '') errors.amount = '金額を入力してください。';
-    else if (isNaN(v.amount)) errors.amount = '金額は0以上の整数（円）で入力してください。';
+    else if (isNaN(v.amount)) errors.amount = v.currency === 'USD' ? '金額は0以上、小数第2位までの米ドルで入力してください。' : '金額は0以上の整数（円）で入力してください。';
     else if (v.amount > MAX_AMOUNT) errors.amount = '金額が大きすぎます。';
 
     v.cycle = str(input.cycle);
@@ -96,8 +109,7 @@
     }
 
     v.nextRenewal = str(input.nextRenewal);
-    if (!v.nextRenewal) errors.nextRenewal = '次回更新日を入力してください。';
-    else if (!D.isValid(v.nextRenewal)) errors.nextRenewal = '次回更新日の形式が正しくありません。';
+    if (v.nextRenewal && !D.isValid(v.nextRenewal)) errors.nextRenewal = '次回更新日の形式が正しくありません。';
 
     v.paymentMethod = str(input.paymentMethod);
     if (v.paymentMethod.length > MAX_TEXT.paymentMethod) {
@@ -153,6 +165,7 @@
    */
   function rolledRenewal(sub, today) {
     var d = sub.nextRenewal;
+    if (!d) return '';
     if (d >= today) return d; // YYYY-MM-DD は文字列比較で大小が正しい
     if (sub.cycle === 'weekly' || sub.cycle === 'custom') {
       var step = sub.cycle === 'weekly' ? 7 : sub.customIntervalDays;
@@ -203,23 +216,25 @@
   }
 
   /** 合計（合算してから四捨五入） */
-  function totals(list) {
+  function totals(list, rate) {
     var m = 0, y = 0;
-    list.forEach(function (s) { m += monthlyCost(s); y += yearlyCost(s); });
+    list.forEach(function (s) { m += toYen(monthlyCost(s), s.currency, rate); y += toYen(yearlyCost(s), s.currency, rate); });
     return { monthly: Math.round(m), yearly: Math.round(y), count: list.length };
   }
 
-  function daysLeft(sub, today) { return D.diffDays(today, sub.nextRenewal); }
+  function daysLeft(sub, today) { return sub.nextRenewal ? D.diffDays(today, sub.nextRenewal) : null; }
 
   /** 通知ウィンドウ内か（0 <= 残日数 <= notifyDaysBefore） */
   function isInNotifyWindow(sub, today) {
     var n = daysLeft(sub, today);
-    return n >= 0 && n <= sub.notifyDaysBefore;
+    return n !== null && n >= 0 && n <= sub.notifyDaysBefore;
   }
 
   /** 次回更新日が近い順（同日なら名前順） */
   function sortByRenewal(list) {
     return list.slice().sort(function (a, b) {
+      if (!a.nextRenewal && b.nextRenewal) return 1;
+      if (a.nextRenewal && !b.nextRenewal) return -1;
       if (a.nextRenewal !== b.nextRenewal) return a.nextRenewal < b.nextRenewal ? -1 : 1;
       return a.name.localeCompare(b.name, 'ja');
     });
@@ -231,6 +246,7 @@
   }
 
   function daysLeftLabel(n) {
+    if (n == null) return '更新日未確認';
     if (n < 0) return '期限切れ';
     if (n === 0) return '今日';
     if (n === 1) return '明日';
@@ -239,6 +255,10 @@
 
   function formatYen(n) {
     return '¥' + Math.round(n).toLocaleString('ja-JP');
+  }
+
+  function formatAmount(n, currency) {
+    return currency === 'USD' ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatYen(n);
   }
 
   /** 明らかにデモと分かるデータ（架空の金額） */
@@ -261,6 +281,10 @@
   }
 
   root.SK.subs = {
+    DEFAULT_USD_JPY_RATE: DEFAULT_USD_JPY_RATE,
+    validRate: validRate,
+    toYen: toYen,
+    formatAmount: formatAmount,
     CYCLES: CYCLES,
     CYCLE_LABELS: CYCLE_LABELS,
     DEFAULT_NOTIFY_DAYS: DEFAULT_NOTIFY_DAYS,

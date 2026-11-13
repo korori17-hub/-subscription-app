@@ -7,7 +7,7 @@
   var S = root.SK.subs;
   var ui = root.SK.ui;
 
-  var FIELDS = ['name', 'amount', 'cycle', 'customIntervalDays', 'nextRenewal',
+  var FIELDS = ['name', 'currency', 'amount', 'cycle', 'customIntervalDays', 'nextRenewal',
     'paymentMethod', 'cancelUrl', 'notes', 'notifyDaysBefore'];
 
   var form, editing = null;
@@ -18,6 +18,14 @@
     var radios = form.querySelectorAll('input[name="cycle"]');
     Array.prototype.forEach.call(radios, function (r) { r.checked = r.value === value; });
     updateCustomVisibility();
+  }
+
+  function updateCurrency() {
+    var usd = field('currency').value === 'USD';
+    ui.$('#amount-label').textContent = usd ? '金額（米ドル）' : '金額（円）';
+    ui.$('#amount-prefix').textContent = usd ? '$' : '¥';
+    field('amount').inputMode = usd ? 'decimal' : 'numeric';
+    field('amount').placeholder = usd ? '例：22.00' : '例：990';
   }
 
   function currentCycle() {
@@ -72,10 +80,12 @@
     ui.$('#form-title').textContent = sub ? 'サブスクを編集' : 'サブスクを追加';
     ui.$('#form-submit').textContent = sub ? '変更を保存' : '追加する';
     field('name').value = sub ? sub.name : '';
-    field('amount').value = sub ? String(sub.amount) : '';
+    field('currency').value = sub ? sub.currency : 'JPY';
+    updateCurrency();
+    field('amount').value = sub ? (sub.currency === 'USD' ? sub.amount.toFixed(2) : String(sub.amount)) : '';
     setCycle(sub ? sub.cycle : 'monthly');
     field('customIntervalDays').value = sub && sub.customIntervalDays ? String(sub.customIntervalDays) : '';
-    field('nextRenewal').value = sub ? sub.nextRenewal : today;
+    field('nextRenewal').value = sub ? sub.nextRenewal : '';
     field('paymentMethod').value = sub ? sub.paymentMethod : '';
     field('cancelUrl').value = sub ? sub.cancelUrl : '';
     field('notes').value = sub ? sub.notes : '';
@@ -86,6 +96,7 @@
     var v = {
       name: field('name').value,
       amount: field('amount').value,
+      currency: field('currency').value,
       cycle: currentCycle(),
       customIntervalDays: field('customIntervalDays').value,
       nextRenewal: field('nextRenewal').value,
@@ -111,6 +122,9 @@
     form = ui.$('#sub-form');
     Array.prototype.forEach.call(form.querySelectorAll('input[name="cycle"]'), function (r) {
       r.addEventListener('change', updateCustomVisibility);
+    });
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="currency"]'), function (r) {
+      r.addEventListener('change', updateCurrency);
     });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
