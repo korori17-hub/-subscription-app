@@ -18,7 +18,7 @@
     return String(s == null ? '' : s)
       .replace(/\\/g, '\\\\')
       .replace(/\r\n|\r|\n/g, '\\n')
-      .replace(/;/g, '\;')
+      .replace(/;/g, '\\;')
       .replace(/,/g, '\\,');
   }
 

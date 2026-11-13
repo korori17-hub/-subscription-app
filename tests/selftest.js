@@ -166,7 +166,7 @@ t('基本構造', function () {
   assert.ok(lines.indexOf('TRIGGER;RELATED=START:-P2DT15H') > 0);
   assert.ok(lines.indexOf('ACTION:DISPLAY') > 0);
   assert.ok(lines.indexOf('DTSTAMP:20261113T000000Z') > 0);
-  assert.ok(ics.indexOf('動画配信A\\, 家族\;用') > 0);
+  assert.ok(ics.indexOf('動画配信A\\, 家族\\;用') > 0);
   // BEGIN/END の対応
   ['VCALENDAR', 'VEVENT', 'VALARM'].forEach(function (k) {
     assert.strictEqual(ics.split('BEGIN:' + k).length, ics.split('END:' + k).length, k);
